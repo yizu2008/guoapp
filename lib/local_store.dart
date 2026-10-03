@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'app_build.dart';
 import 'local_profiles.dart';
 import 'local_snapshot.dart';
 import 'models.dart';
@@ -154,7 +155,9 @@ class LocalStore extends ChangeNotifier {
 
   void _loadSourceGate() {
     final enabled = _bool('sourceGateEnabled') ?? false;
-    final off = _bool('sourceGateOff') ?? false;
+    // 真果鉴（全部站源版）默认关闭站源隐藏开关，直接进入可见状态；
+    // 红果鉴仍保持原默认（隐藏受限站源，需解锁）。
+    final off = _bool('sourceGateOff') ?? allSourcesEnabled;
     final salt = _string('sourceGateSalt') ?? '';
     final hash = _string('sourceGateHash') ?? '';
     final valid =
