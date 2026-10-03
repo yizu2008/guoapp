@@ -70,7 +70,7 @@ Flutter 多端独立短剧 / 影视应用，原名「短剧库 APP」。站源�
 | Android 8.0+ | 三架构（arm64-v8a / armeabi-v7a / x86_64）APK；同一签名可覆盖升级 |
 | Windows 10/11 x64 | 完整 ZIP 解压后运行 `hongguojian.exe` / `zhenguojian.exe`，保留所有 DLL 与 `data`；局域网原生发现依赖 Windows 10 1903+ |
 | Android TV | 与手机共用源码，自动识别电视模式并保持横屏；待电视 / 盒子实机验收 |
-| iOS 15.1+ | 已加入工程、Go 核心链接、媒体依赖、文件管理与构建脚本；iOS 播放页禁用 media_kit_video 硬件纹理加速以规避 libmpv 渲染崩溃；待 Xcode 构建与真机验收，无已签名 IPA |
+| iOS 15.1+（iPhone，iOS 15 系列及以后） | 已加入工程、Go 核心链接、媒体依赖、文件管理与构建脚本；iOS 播放页禁用 media_kit_video 硬件纹理加速以规避 libmpv 渲染崩溃；GitHub Actions 的 `ios` 任务在 macOS 上自动构建**未签名 IPA**（红果鉴 / 真果鉴），用 AltStore / Sideloadly / TrollStore 自签后可装；已签名 IPA 需自备证书与描述文件；待真机验收 |
 
 `INSTALL_FAILED_NO_MATCHING_ABIS` 表示 APK 与设备架构不匹配，请更换对应架构安装包。
 
@@ -82,7 +82,7 @@ Flutter 多端独立短剧 / 影视应用，原名「短剧库 APP」。站源�
 | --- | --- |
 | `*-android` | 三种架构 APK 和 SHA256 |
 | `*-windows` | 完整 ZIP 和 SHA256 |
-| `*-ios-unsigned` | 未签名 `.app` ZIP 和 SHA256，不能直接当已签名 IPA 安装 |
+| `*-ios-unsigned` | 真果鉴 / 红果鉴的未签名 IPA 与 `.app` ZIP 及 SHA256；需经 AltStore / Sideloadly / TrollStore 等工具自签后才能安装到 iPhone（iOS 15.1+） |
 
 推送 `main` 且 android / ios / windows 全部构建成功时，自动创建 / 更新 GitHub Release（tag `app-v{version}`）。发布新版本前需先在 `pubspec.yaml` 提升 `version`，否则会覆盖同名 tag 的 Release。
 
@@ -124,6 +124,42 @@ python3 scripts/build_ios.py --export-options /path/to/ExportOptions.plist
 ~~~
 
 产物在 `dist/android`、`dist/windows`、`dist/ios`，红果版以 `hongguojian-` 开头，全站源版以 `zhenguojian-` 开头。
+
+### 真果鉴 iOS IPA（iPhone，iOS 15.1+）
+
+真果鉴 = 全部站源，对应 `--all-sources`；构建时显示名自动设为「真果鉴」，包名 `zhenguojian-*`。
+
+**方式一：GitHub Actions 自动出包（无需 Mac / 证书）**
+
+仓库已启用 `Build app packages` 工作流的 `ios` 任务（macOS runner）。推送 `main` / `master` 或手动运行后，CI 自动构建并上传 **未签名 IPA** 产物：
+
+- `zhenguojian-<版本>-ios-unsigned.ipa`：真果鉴未签名 IPA，用 AltStore / Sideloadly / TrollStore 自签后装到 iPhone（需 iOS 15.1+）。
+- `zhenguojian-<版本>-ios-unsigned-app.zip`：未签名 `Runner.app` 压缩包，供自行签名 / 出包。
+
+下载对应版本产物即可，无需本地具备 macOS 或 Apple 证书。
+
+**方式二：本地 macOS 构建**
+
+~~~sh
+python3 scripts/build_ios.py --all-sources                 # 真果鉴未签名 IPA（默认，无需证书）
+python3 scripts/build_ios.py --all-sources --simulator     # 额外生成模拟器核心
+python3 scripts/build_ios.py --core-only [--simulator]     # 仅重建 Go 核心 xcframework
+~~~
+
+环境：macOS + 完整 Xcode + CocoaPods + Go 1.24.1+ + Flutter 3.47.4。脚本会先用 Go 编译 `DuanjuCore.xcframework`，再 `pod install` 并 `flutter build ios --no-codesign`，最后打包未签名 IPA。
+
+**方式三：已签名 IPA（App Store / TestFlight / 企业 / Ad-Hoc）**
+
+自备证书与描述文件后，用导出配置出已签名 IPA：
+
+~~~sh
+python3 scripts/build_ios.py --all-sources --export-options ios/ExportOptions-adhoc.plist
+# 或开发签名：ios/ExportOptions-development.plist
+~~~
+
+模板里把 `YOUR_TEAM_ID` 与描述文件名称替换为你自己的，并把 `com.duanju.duanjuApp` 换成实际 Bundle ID 对应的描述文件。
+
+> 未签名 IPA 经免费 Apple ID 自签有效期约 7 天，企业 / Ad-Hoc 按证书有效期。iOS 真机播放与后台下载尚未在 CI 完成验收，标记为开发快照。
 
 首次 Android 调试先编译对应架构核心，再运行：
 
