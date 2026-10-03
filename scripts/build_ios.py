@@ -11,6 +11,42 @@ from pathlib import Path
 
 from app_build import BuildVariant, add_variant_argument
 
+
+def _package_ipa(payload_dir: Path, ipa_path: Path) -> None:
+    """把 Payload 目录打包成合法 IPA（zip 内顶层为 Payload/Runner.app）。
+
+    ditto -k 在某些 macOS 版本会吞掉 Payload 顶层目录，导致 TrollStore/
+    AltStore 无法识别。改用 zipfile 显式打包，并保留 Unix 权限与符号链接。
+    """
+    import stat as _stat
+    import zipfile
+
+    def _add(zf, path, arc):
+        st = os.lstat(path)
+        m = st.st_mode
+        if _stat.S_ISLNK(m):
+            zi = zipfile.ZipInfo(arc)
+            zi.external_attr = (_stat.S_IFLNK | 0o777) << 16
+            zf.writestr(zi, os.readlink(path))
+        elif _stat.S_ISDIR(m):
+            zi = zipfile.ZipInfo(arc + '/')
+            zi.external_attr = (m & 0xFFFF) << 16
+            zf.writestr(zi, '')
+        else:
+            zi = zipfile.ZipInfo(arc)
+            zi.external_attr = (m & 0xFFFF) << 16
+            with open(path, 'rb') as fh:
+                zf.writestr(zi, fh.read())
+
+    with zipfile.ZipFile(ipa_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for root, dirs, files in os.walk(payload_dir):
+            for d in sorted(dirs):
+                p = os.path.join(root, d)
+                _add(zf, p, os.path.relpath(p, payload_dir.parent))
+            for f in sorted(files):
+                p = os.path.join(root, f)
+                _add(zf, p, os.path.relpath(p, payload_dir.parent))
+
 root = Path(__file__).resolve().parents[1]
 
 
@@ -116,7 +152,7 @@ def main():
         ipa = output / f'{variant.slug}-{version}-ios-unsigned.ipa'
         if ipa.exists():
             ipa.unlink()
-        run(['ditto', '-c', '-k', '--sequesterRsrc', str(payload), str(ipa)])
+        _package_ipa(payload, ipa)
         shutil.rmtree(payload)
         artifacts.append(ipa)
     if not artifacts:
